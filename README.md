@@ -22,7 +22,9 @@ import requests
 import re
 import pyautogui #pip install pyautogui
 from googlesearch import search
-
+import tkinter as tk
+import string
+import shutil
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init('sapi5')
@@ -72,6 +74,172 @@ def listen_command():
         print(e)
         speak("I didn't catch that. Please say it again.")
         return "none"
+
+def get_all_drives():
+    """Get a list of all available drives on the system."""
+    drives = []
+    for letter in string.ascii_uppercase:
+        drive = f"{letter}:\\"
+        if os.path.exists(drive):
+            drives.append(drive)
+    return drives
+
+def search_and_open_item(item_name, is_folder=False, window=None):
+    """Search and open a file or folder in a background thread."""
+    def task():
+        if window:
+            item_type = "folder" if is_folder else "file"
+            window.output_box.append(f"AutoBot: Searching for {item_name} {item_type}...\n")
+            speak(f"Searching for {item_name} {item_type}.", window)
+
+        # Run the search in a background thread
+        try:
+            item_path = find_folder(item_name) if is_folder else find_file(item_name)
+            if item_path:
+                os.startfile(item_path)  # Open the folder or file
+                response = f"Opening {item_name}\nPath: {item_path}"  # Show path in output
+                if window:
+                    window.output_box.append(f"AutoBot: {response}\n")
+                speak(f"Opening {item_name}", window)  # Speak only the name
+            else:
+                response = f"{item_name} not found on this system."
+                if window:
+                    window.output_box.append(f"AutoBot: {response}\n")
+                speak(response, window)
+        except Exception as e:
+            response = f"Error opening {item_name}: {str(e)}"
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+            speak(response, window)
+
+    # Run the search in a background thread
+    threading.Thread(target=task).start()
+
+def find_file(file_name):
+    """Search for a file across all drives in a case-insensitive manner."""
+    file_name_lower = file_name.lower()
+    drives = get_all_drives()  # Get all available drives
+
+    for drive in drives:
+        for root, dirs, files in os.walk(drive):  # Walk through each drive
+            for file in files:
+                if file.lower() == file_name_lower:  # Case-insensitive comparison
+                    return os.path.join(root, file)  # Return the full path
+    return None
+    
+def find_folder(folder_name):
+    """Search for a folder across all drives in a case-insensitive manner."""
+    folder_name_lower = folder_name.lower()
+    drives = get_all_drives()  # Get all available drives
+
+    for drive in drives:
+        for root, dirs, files in os.walk(drive):  # Walk through each drive
+            for dir_name in dirs:
+                if dir_name.lower() == folder_name_lower:  # Case-insensitive comparison
+                    return os.path.join(root, dir_name)  # Return the full path
+    return None
+
+def open_file_globally(file_name, window=None):
+    """Search for a file across the PC and open it."""
+    if window:
+        window.output_box.append(f"AutoBot: Searching for {file_name} file...\n")
+    try:
+        file_path = find_file(file_name)  # Ensure this calls the `find_file` function
+        if file_path:
+            os.startfile(file_path)  # Open the file
+            response = f"Opening {file_name}\nPath: {file_path}"  # Display the path
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+            speak(f"Opening {file_name}", window)  # Speak only the file name
+        else:
+            response = f"File {file_name} not found on this system."
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+            speak(response, window)
+    except Exception as e:
+        response = f"Error opening file: {str(e)}"
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+def open_item(item_name, is_folder=False, window=None):
+    if not item_name:
+        response = "Please specify the name of the file or folder you want to open."
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+    search_and_open_item(item_name, is_folder, window)
+
+def create_file_in_drive(drive_letter, folder_name, file_name, content="", window=None):
+    """Create a new file at the specified drive, folder, and with the specified file name."""
+    try:
+        # Construct the full file path
+        file_path = os.path.join(drive_letter + ":", folder_name, file_name)
+        
+        # Check if the file already exists
+        if os.path.exists(file_path):
+            response = f"The file {file_path} already exists."
+        else:
+            # Create the file and write content if provided
+            with open(file_path, "w") as file:
+                file.write(content)
+            response = f"File {file_path} created successfully."
+        
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+    except Exception as e:
+        response = f"Error creating file: {str(e)}"
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+def delete_file(file_path, window=None):
+    """Delete a file at the specified path."""
+    try:
+        # Check if the file exists
+        if os.path.exists(file_path):
+            os.remove(file_path)  # Delete the file
+            response = f"File {file_path} deleted successfully."
+        else:
+            response = f"File {file_path} does not exist."
+        
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+    except Exception as e:
+        response = f"Error deleting file: {str(e)}"
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+
+def create_folder_in_drive(drive_letter, folder_name, window=None):
+    try:
+        folder_path = os.path.join(f"{drive_letter}:/", folder_name)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            response = f"Folder {folder_path} created successfully."
+        else:
+            response = f"The folder {folder_path} already exists."
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+    except PermissionError:
+        response = f"Permission denied: Unable to create folder {folder_path}. Try running as administrator."
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+    except Exception as e:
+        response = f"Error creating folder: {str(e)}"
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+
 
 # Function to get weather information from OpenWeatherMap
 def get_weather(location, window=None):
@@ -143,7 +311,6 @@ def get_time_and_date_in_location(location):
         return "Sorry, I couldn't find the location. Please provide a valid city or country name."
 
 
-
 # Wikipedia search function to get a short summary
 def get_wikipedia_summary(query):
     try:
@@ -166,55 +333,59 @@ from googlesearch import search
 
 def google_search(query):
     try:
-        # Collect search results in a list
-        search_results = []
-        for url in search(query, num_results=5):  # Fetch top 5 results
-            search_results.append(url)
+        from googlesearch import search  # Ensure import is inside the function
         
-        # Format the results as a string
-        response = f"Here are the top search results for {query}:\n" + "\n".join(search_results)
-        return response
-    except Exception as e:
-        print(f"Error during Google search: {str(e)}")
-        return "Sorry, I couldn't complete the search. Please try again."
+        # Collect search results
+        search_results = []
+        for idx, url in enumerate(search(query, num_results=5)):  # Fetch top 5 results
+            # Format results as clickable links
+            search_results.append(f"{idx+1}. <a href='{url}' target='_blank'>{url}</a>")
 
-google_keywords = ["search for", "find", "google"]
-
-# Execute system command
-def execute_command(command, window=None):
-    command = command.lower()  # Ensure command is in lowercase for easier parsing
-    
-    # Check for volume up or down by specific percentage
-    if 'volume' in command and ('increase' in command or 'decrease' in command):
-        # Extract percentage from command
-        match = re.search(r'\b\d{1,3}\b', command)
-        if match:
-            percentage = int(match.group())
-            # Make sure percentage is between 1 and 100
-            if 1 <= percentage <= 100:
-                volume_change = int(65535 * (percentage / 100))  # Calculate the nircmd volume units
-                if 'increase' in command:
-                    speak(f"Increasing volume by {percentage} percent.", window)
-                    subprocess.run(["C:\\Windows\\System32\\nircmd.exe", "changesysvolume", str(volume_change)])
-                elif 'decrease' in command:
-                    speak(f"Decreasing volume by {percentage} percent.", window)
-                    subprocess.run(["C:\\Windows\\System32\\nircmd.exe", "changesysvolume", f"-{volume_change}"])
-                return
-            else:
-                speak("Please specify a percentage between 1 and 100.", window)
-                return
+        # Return formatted results
+        if search_results:
+            return "Here are the top search results:<br>" + "<br>".join(search_results)
         else:
-            # If no specific percentage is mentioned, decrease by 10% (default)
-            if 'decrease' in command:
-                speak("Decreasing volume by 10 percent.", window)
-                subprocess.run(["C:\\Windows\\System32\\nircmd.exe", "changesysvolume", "-6553"])  # 10% decrease
-            # If no specific volume action is mentioned, increase by 10% (default)
-            elif 'increase' in command:
-                speak("Increasing volume by 10 percent.", window)
-                subprocess.run(["C:\\Windows\\System32\\nircmd.exe", "changesysvolume", "6553"])  # 10% increase
-            return
-    
+            return "No results found."
+    except Exception as e:
+        print(f"Error in google_search: {e}")
+        return "Sorry, I couldn't fetch results right now."
 
+def get_news(category="general", window=None):
+    api_key = "a4a92542fe4e44e1af404e84b0f26639"  # Replace with your actual NewsAPI key
+    base_url = f"https://newsapi.org/v2/top-headlines?apiKey={api_key}&category={category}&country=us"
+
+    try:
+        response = requests.get(base_url)
+        data = response.json()
+
+        if data["status"] == "ok":
+            articles = data.get("articles", [])
+            if articles:
+                # Include headlines with clickable links
+                news_headlines = [
+                    f"{idx+1}. <a href='{article['url']}' target='_blank'>{article['title']}</a>"
+                    for idx, article in enumerate(articles[:5])  # Limit to top 5 articles
+                ]
+                news_summary = "Here are the latest headlines:<br>" + "<br>".join(news_headlines)
+                return news_summary
+            else:
+                return "Sorry, I couldn't find any news in this category at the moment."
+        else:
+            return f"Error fetching news: {data.get('message', 'Unknown error')}"
+    except Exception as e:
+        return f"An error occurred while fetching news: {str(e)}"
+
+news_categories = {
+    "general": "General News",
+    "sports": "Sports News",
+    "entertainment": "Entertainment News",
+    "health": "Health News",
+    "business": "Business News",
+    "science": "Science News",
+    "technology": "Technology News"
+}
+
+current_news_request = {"active": False}   # Track the news flow state
 
 # Respond to user mood
 def respond_to_mood(mood, window=None):
@@ -278,6 +449,8 @@ def handle_location_query(query, window=None):
     else:
         speak("I'm sorry, I can only help with location-based queries like 'Where is India located?'", window)
 
+
+
 # Main handler for queries
 def handle_query(query, window=None):
     original_query = query
@@ -285,13 +458,7 @@ def handle_query(query, window=None):
 
     if window:
         window.output_box.append(f"You said: {original_query}\n")
-
-    # Check if user wants to quit
-    if "quit" in query:
-        speak("Goodbye! Closing the application.", window)
-        QApplication.quit()  # Quit the application
-        return
-
+        
     # Check if user wants to set their name
     if "my name is" in query:
         name = query.replace("my name is", "").strip()
@@ -334,15 +501,18 @@ def handle_query(query, window=None):
 
     elif 'hello' in query or 'hi' in query or 'hey' in query:
         wishings(window)  # Call the new greeting function
+        return
 
     elif 'play' in query or 'watch' in query:
         open_youtube(query, window)
+        return
 
     elif 'tell me a joke' in query:
         joke = pyjokes.get_joke()
         speak(joke, window)
         if window:
             window.output_box.append(f"AutoBot: {joke}\n")
+            return
     
     elif "screenshot" in query:
         try:
@@ -362,6 +532,49 @@ def handle_query(query, window=None):
             if window:
                 window.output_box.append(f"AutoBot: Error taking screenshot: {str(e)}\n")
             return
+
+    global current_news_request
+
+    original_query = query.lower()
+    if window:
+        window.output_box.append(f"You said: {original_query}\n")
+
+    # Handle "news" query
+    if "news" in original_query and not current_news_request["active"]:
+        response = "Please choose a category: sports, entertainment, health, business, science, or technology."
+        speak("Please choose a category for news.", window)
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        current_news_request["active"] = True  # Enter news mode
+        return
+
+    # Handle category selection while in news mode
+    if current_news_request["active"]:
+        selected_category = next((key for key, value in news_categories.items() if key in original_query), None)
+        if selected_category:
+            response = get_news(category=selected_category, window=window)
+            speak("Here are the latest news headlines.", window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+        # Ask for another category or exit news mode
+            speak("Would you like to choose another category or exit news mode?", window)
+            if window:
+                window.output_box.append("AutoBot: Would you like to choose another category or exit news mode?\n")
+        elif "exit" in original_query or "stop" in original_query:
+            response = "Exiting news mode. How else can I help you?"
+            speak(response, window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+            current_news_request["active"] = False  # Exit news mode
+        else:
+            response = (
+            "Sorry, I couldn't recognize the category. Please choose one from sports, entertainment, health, "
+            "business, science, or technology, or say 'exit' to leave news mode."
+            )
+            speak(response, window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+        return
         
  # Check if the query asks for weather
     if "weather" in query or "temperature" in query or "forecast" in query:
@@ -380,40 +593,69 @@ def handle_query(query, window=None):
                 window.output_box.append("AutoBot: Please specify a city or country to get the weather information.\n")
         return
 
-     # Check if the query is asking about something ambiguous like "What is" or "Who is"
-    if "what is" in query or "who is" in query or "who was" in query or "who was" in query:
+    # for Google searches
+    if any(keyword in query.lower() for keyword in ["search for", "find", "google this"]):
+    # Extract the search query
+        for keyword in ["search for", "find", "google this"]:
+            if keyword in query.lower():
+                query = query.lower().replace(keyword, "").strip()
+                break  # Exit loop after first match
+
+        # Perform the Google search
+        print(f"Searching for: {query}")  # Debug output
+        response = google_search(query)  # Fetch results using the google_search function
+    
+        # Speak a summary
+        speak(f"Here are the search results for {query}.", window)
+    
+        # Display the results in the output box
+        if window:
+            if response:
+                window.output_box.append(f"<b>AutoBot:</b><br>{response}<br>")
+            else:
+                window.output_box.append(f"AutoBot: Sorry, I couldn't find any results for {query}.\n")
+        return
+
+    # Handle time-related queries (including date)
+    if "what is the time now" in query or "what time is it" in query:
+        now = datetime.now().strftime("%H:%M:%S")  # Get current time in HH:MM:SS format
+        current_date = datetime.now().strftime("%A, %B %d, %Y")  # Get current date
+        response = f"The current time is {now} and today's date is {current_date}."
+        speak(response, window)
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        return
+
+         # Handle "What is the date today" query
+    if "what is the date today" in query or "what is todays date" in query:
+        current_date = datetime.now().strftime("%A, %B %d, %Y")  # Get current date
+        response = f"Today's date is {current_date}."
+        speak(response, window)
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        return
+
+    # Handle location-based time query like "time in India"
+    if "time in" in query:
+        location = query.replace("time in", "").strip()  # Extract the location
+        if location:
+            response = get_time_and_date_in_location(location)  # Get time and date for the location
+            speak(response, window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+        else:
+            speak("Please specify a location to get the time information.", window)
+            if window:
+                window.output_box.append("AutoBot: Please specify a location to get the time information.\n")
+        return
+
+ # Check if the query is asking about something ambiguous like "What is" or "Who is"
+    if "what is" in query or "who is" in query or "what was" in query or "who was" in query:
         response = get_wikipedia_summary(query)
         speak(response, window)
         if window:
             window.output_box.append(f"AutoBot: {response}\n")
         return
-    
-    # for Google searches
-    if any(keyword in query.lower() for keyword in google_keywords):
-    # Strip out the keyword to get the main search query
-        for keyword in google_keywords:
-            query = query.lower().replace(keyword, '').strip()
-    
-        # Perform the Google search
-        response = google_search(query)  # Get the search results as a string
-    
-        # Speak a concise summary
-        speak(f"Here are the top search results for {query}", window)
-    
-        # Display the full results in the chatbot window
-        if window:
-            window.output_box.append(f"AutoBot: {response}\n")
-        return
-
-    # Handle queries for time and date in a location
-    if "what time is it in" in query or "time in"in query:
-        location = query.replace("what time is it in", "").strip()
-        if location:
-            response = get_time_and_date_in_location(location)  # Use the updated function
-            speak(response, window)
-            if window:
-                window.output_box.append(f"AutoBot: {response}\n")
-            return
 
     # Now we can safely ignore the fallback here because we already responded above
     elif "sorry" in query or query == "":
@@ -423,9 +665,6 @@ def handle_query(query, window=None):
     if "where is" in query or "where was" in query:
         handle_location_query(query, window)
         return
-
-    elif 'volume' in query:
-        execute_command(query, window)
 
     elif 'open' in query:
         if 'youtube' in query:
@@ -476,8 +715,8 @@ def handle_query(query, window=None):
             speak("Please specify the website you want to open.", window)
         return
     
-    if "close" in query and "app" in query:
-        app_name = query.replace("close", "").replace("app", "").strip()
+    if "close" in query:
+        app_name = query.replace("close", "").strip()
         if app_name:
             if app_name.lower() == "notepad":
                 os.system('taskkill /f /im notepad.exe')  # Close Notepad
@@ -503,24 +742,203 @@ def handle_query(query, window=None):
             speak("Please specify which app you want to close.", window)
         return
 
+# Update the query handler to detect and handle "create folder" command
+    if "create a new folder" in query.lower():
+        match = re.search(r'create a new folder at\s+(.+)', query.strip(), re.IGNORECASE)
+        if match:
+            folder_path = match.group(1).strip()
+            try:
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+                    response = f"Folder created successfully at: {folder_path}"
+                else:
+                    response = f"The folder already exists at: {folder_path}"
+            except PermissionError:
+                response = f"Permission denied: Unable to create folder at {folder_path}. Try running as administrator."
+            except Exception as e:
+                response = f"Error creating folder: {str(e)}"
+        else:
+            response = "Please specify a valid command like 'create a new folder at C:\\Users\\MyFolder'."
+
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+# Update the query handler to detect and handle "create file" command
+    elif "create a new file" in query.lower():
+        # Initialize response with a default value
+        response = "Please specify a valid command like 'create a new file at C:\\Users\\MyFolder\\MyFile.txt'."
+    
+        # Extract the file path directly from the input query
+        match = re.search(r'create a new file at\s+(.+)', query.strip(), re.IGNORECASE)
+        if match:
+            file_path = match.group(1).strip()  # Extract the full file path
+            try:
+                # Create the file and write some default content
+                if not os.path.exists(file_path):
+                    with open(file_path, "w") as file:
+                        file.write("This is a new file created by AutoBot.")  # Default content
+                    response = f"File created successfully at: {file_path}"
+                else:
+                    response = f"The file already exists at: {file_path}"
+            except PermissionError:
+                response = f"Permission denied: Unable to create file at {file_path}. Try running as administrator."
+            except Exception as e:
+                response = f"Error creating file: {str(e)}"
+
+    # Provide feedback
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+    # Delete File
+    elif "delete file" in query.lower():
+        # Initialize response with a default message
+        response = "Please specify a valid file path like 'delete file at C:\\MyFolder\\MyFile.txt'."
+    
+        # Extract the file path directly from the input query
+        match = re.search(r'delete file at\s+(.+)', query.strip(), re.IGNORECASE)
+        if match:
+            file_path = match.group(1).strip()  # Extract the full file path
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)  # Delete the file
+                    response = f"File at {file_path} deleted successfully."
+                else:
+                    response = f"The file at {file_path} does not exist."
+            except PermissionError:
+                response = f"Permission denied: Unable to delete file at {file_path}. Try running as administrator."
+            except Exception as e:
+                response = f"Error deleting file: {str(e)}"
+    
+    # Provide feedback
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+    # Delete folders
+    elif "delete folder" in query.lower():
+        # Initialize response with a default message
+        response = "Please specify a valid folder path like 'delete folder at C:\\MyFolder'."
+    
+        # Extract the folder path directly from the input query
+        match = re.search(r'delete folder at\s+(.+)', query.strip(), re.IGNORECASE)
+        if match:
+            folder_path = match.group(1).strip()  # Extract the full folder path
+            try:
+                if os.path.exists(folder_path) and os.path.isdir(folder_path):
+                    os.rmdir(folder_path)  # Delete the folder (works only if it's empty)
+                    response = f"Folder at {folder_path} deleted successfully."
+                elif os.path.exists(folder_path):
+                    response = f"The folder at {folder_path} is not empty. Unable to delete it."
+                else:
+                    response = f"The folder at {folder_path} does not exist."
+            except PermissionError:
+                response = f"Permission denied: Unable to delete folder at {folder_path}. Try running as administrator."
+            except Exception as e:
+                response = f"Error deleting folder: {str(e)}"
+    
+        # Provide feedback
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+    # Delete Folders
+    elif "delete folder" in query.lower():
+        response = "Please specify a valid folder path like 'delete folder at C:\\MyFolder'."
+    
+        match = re.search(r'delete folder at\s+(.+)', query.strip(), re.IGNORECASE)
+        if match:
+            folder_path = match.group(1).strip()
+            try:
+                if os.path.exists(folder_path) and os.path.isdir(folder_path):
+                    shutil.rmtree(folder_path)  # Deletes the folder and all its contents
+                    response = f"Folder at {folder_path} and its contents deleted successfully."
+                else:
+                    response = f"The folder at {folder_path} does not exist."
+            except PermissionError:
+                response = f"Permission denied: Unable to delete folder at {folder_path}. Try running as administrator."
+            except Exception as e:
+                response = f"Error deleting folder: {str(e)}"
+    
+        if window:
+            window.output_box.append(f"AutoBot: {response}\n")
+        speak(response, window)
+        return
+
+# Opening files
+    elif "open file" in query:
+        file_name = query.replace("open file", "").strip()  # Extract the file name
+        if file_name:
+            open_item(file_name, is_folder=False, window=window)  # Use background search
+        else:
+            response = "Please specify a file name to open."
+            speak(response, window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+        return
+
+#opening folders
+    elif "open folder" in query:
+        folder_name = query.replace("open folder", "").strip()  # Extract the folder name
+        if folder_name:
+            open_item(folder_name, is_folder=True, window=window)  # Use background search
+        else:
+            response = "Please specify a folder name to open."
+            speak(response, window)
+            if window:
+                window.output_box.append(f"AutoBot: {response}\n")
+        return
+
+
+    elif 'shutdown pc' in query or 'shut down the pc' in query:
+        os.system('shutdown /s /t 5')  # Adjust the timer as needed (5 seconds here)
+        speak("Shutting down the PC in a moment.",window)
+        return
+
+    elif 'restart pc' in query or 'Restart the pc' in query:
+        os.system('shutdown /r /t 5')  # Adjust the timer as needed (5 seconds here)
+        speak("Restarting the PC in a moment.",window)
+        return
+    
+    elif 'sleep pc' in query or 'put the pc to sleep' in query:
+        os.system('rundll32.exe powrprof.dll,SetSuspendState 0,1,0')
+        speak("Putting the PC to sleep.",window)
+        return
+
+    elif 'lock pc' in query or 'lock the pc' in query:
+        os.system('rundll32.exe user32.dll,LockWorkStation')
+        speak("Locking the PC.",window)
+        return
+
     else:
         speak("Sorry, I didn't understand that. Can you please repeat?", window)
 
 # PyQt5 GUI
 from PyQt5.QtCore import QTimer  # Ensure this import is at the top of your script
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont
+import sys
+from PyQt5.QtWidgets import QTextBrowser  # Import QTextBrowser
 
 class AssistantWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AutoBot Assistant")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(300, 300, 800, 600)
 
         layout = QVBoxLayout()
 
-        self.output_box = QTextEdit(self)
-        self.output_box.setReadOnly(True)
+        # Use QTextBrowser instead of QTextEdit for clickable links
+        self.output_box = QTextBrowser(self)
+        self.output_box.setOpenExternalLinks(True)  # Enable clickable links
         self.output_box.setFont(QFont("Arial", 12))
         layout.addWidget(self.output_box)
+
 
         self.input_box = QLineEdit(self)
         self.input_box.setFont(QFont("Arial", 12))
@@ -543,6 +961,8 @@ class AssistantWindow(QWidget):
 
         self.setLayout(layout)
 
+        self.input_box.setFocus()
+
         # Call greeting after window is fully shown
         QTimer.singleShot(0, self.init_assistant)  # Delay the greeting to avoid duplication
 
@@ -551,15 +971,25 @@ class AssistantWindow(QWidget):
         wishings(self)
 
     def on_submit(self):
-        query = self.input_box.text().strip()
+        query = self.input_box.text().strip().lower()  # Convert to lowercase for easy matching
         self.input_box.clear()
 
-        if query:
+        if query in ["shutdown", "quit igris"]:
+            self.output_box.append("Shutting down... Goodbye")
+            if self.mood_checkbox.isChecked():  # Check if voice output is enabled
+                speak("Shutting down... Goodbye")
+            QTimer.singleShot(3000, self.close)  # Delay shutdown for 3 seconds to display the message
+        else:
             handle_query(query, self)
 
     def on_voice_button_click(self):
         query = listen_command()  # Listen for the command via microphone
-        if query != "none":
+        if query.strip().lower() in ["shutdown", "quit igris"]:
+            self.output_box.append("Shutting down... Goodbye")
+            if self.mood_checkbox.isChecked():  # Check if voice output is enabled
+                speak("Shutting down... Goodbye")
+            QTimer.singleShot(3000, self.close)  # Delay shutdown for 3 seconds to display the message
+        else:
             handle_query(query, self)  # Handle the voice query
 
     def keyPressEvent(self, event):
@@ -570,7 +1000,6 @@ class AssistantWindow(QWidget):
     def toggle_voice(self):
         global voice_enabled
         voice_enabled = self.mood_checkbox.isChecked()
-
 
 # Running the application
 if __name__ == "__main__":
